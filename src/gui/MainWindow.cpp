@@ -1,4 +1,6 @@
+#if ENABLE_METAL
 #include "Cafe/HW/Latte/Renderer/Metal/MetalRenderer.h"
+#endif
 #include "Cafe/HW/Latte/Renderer/Renderer.h"
 #include "gui/wxgui.h"
 #include "gui/MainWindow.h"
