@@ -2,6 +2,10 @@ name: Deploy release
 on: 
   workflow_dispatch:
     inputs:
+      version:
+        description: 'Version for new release'
+        required: true
+        type: string
       changelog0:
         description: 'Enter the changelog lines for this release. Each line is a feature / bullet point. Do not use dash.'
         required: true
@@ -38,21 +42,20 @@ on:
         description: 'Feature 9'
         required: false
         type: string
-      changelog9:
-        description: 'Feature 10'
-        required: false
-        type: string
 
 jobs:
   calculate-version:
     name: Calculate Version
     uses: ./.github/workflows/determine_release_version.yml
+    with:
+      version: ${{ github.event.inputs.version }}
   call-release-build:
     uses: ./.github/workflows/build.yml
     needs: calculate-version
     with:
       next_version_major: ${{ needs.calculate-version.outputs.next_version_major }}
       next_version_minor: ${{ needs.calculate-version.outputs.next_version_minor }}
+      next_version_patch: ${{ needs.calculate-version.outputs.next_version_patch }}
   deploy:
     name: Deploy release
     runs-on: ubuntu-22.04
@@ -75,7 +78,6 @@ jobs:
           if [ -n "${{ github.event.inputs.changelog6 }}" ]; then CHANGELOG="$CHANGELOG- ${{ github.event.inputs.changelog6 }}\n"; fi
           if [ -n "${{ github.event.inputs.changelog7 }}" ]; then CHANGELOG="$CHANGELOG- ${{ github.event.inputs.changelog7 }}\n"; fi
           if [ -n "${{ github.event.inputs.changelog8 }}" ]; then CHANGELOG="$CHANGELOG- ${{ github.event.inputs.changelog8 }}\n"; fi
-          if [ -n "${{ github.event.inputs.changelog9 }}" ]; then CHANGELOG="$CHANGELOG- ${{ github.event.inputs.changelog9 }}\n"; fi
           echo -e "$CHANGELOG"
           echo "RELEASE_BODY=$CHANGELOG" >> $GITHUB_ENV
       - uses: actions/download-artifact@v4
@@ -153,7 +155,7 @@ jobs:
         run: cp cemu-bin-macos-arm64/Cemu_arm64.dmg upload/cemu-${{ env.CEMU_VERSION }}-macos-12-arm64.dmg
 
       - name: Create release from macos-bin-universal
-        run: cp cemu-bin-macos-universal/Cemu_Universal.dmg upload/cemu-${{ env.CEMU_VERSION }}-macos-12-universal.dmg
+        run: cp cemu-bin-macos-universal/Cemu_universal.dmg upload/cemu-${{ env.CEMU_VERSION }}-macos-12-universal.dmg
 
       - name: Create release
         run: |
@@ -164,4 +166,4 @@ jobs:
           RELEASE_BODY=$(printf "%s\n%s" \
             "**Changelog:**" \
             "$CHANGELOG_UNESCAPED")
-          ghr_v0.15.0_linux_amd64/ghr -draft -t ${{ secrets.GITHUB_TOKEN }} -n "Cemu ${{ env.CEMU_VERSION }}" -b "$RELEASE_BODY" "v${{ env.CEMU_VERSION }}" ./upload
+          ghr_v0.15.0_linux_amd64/ghr -draft -prerelease -t ${{ secrets.GITHUB_TOKEN }} -n "Cemu ${{ env.CEMU_VERSION }}" -b "$RELEASE_BODY" "v${{ env.CEMU_VERSION }}" ./upload

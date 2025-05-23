@@ -9,6 +9,9 @@ on:
       next_version_minor:
         required: false
         type: string
+      next_version_patch:
+        required: false
+        type: string
 
 env:
   VCPKG_ROOT: "${{github.workspace}}/dependencies/vcpkg"
@@ -34,7 +37,10 @@ jobs:
       if: ${{ inputs.next_version_major != '' }}
       run: |
         echo "[INFO] Version ${{ inputs.next_version_major }}.${{ inputs.next_version_minor }}"
-        echo "BUILD_FLAGS=${{ env.BUILD_FLAGS }} -DEMULATOR_VERSION_MAJOR=${{ inputs.next_version_major }} -DEMULATOR_VERSION_MINOR=${{ inputs.next_version_minor }}" >> $GITHUB_ENV
+        echo "BUILD_FLAGS=${{ env.BUILD_FLAGS }} \
+        -DEMULATOR_VERSION_MAJOR=${{ inputs.next_version_major }} \
+        -DEMULATOR_VERSION_MINOR=${{ inputs.next_version_minor }} \
+        -DEMULATOR_VERSION_PATCH=${{ inputs.next_version_patch }}" >> $GITHUB_ENV
 
     - name: "Install system dependencies"
       run: |
@@ -252,10 +258,12 @@ jobs:
 
     - name: "Move x64 artifact"
       run: |
-        mv bin/Cemu_release.app bin/Cemu_x64.app
-        mv bin/Cemu_x64.app/Contents/MacOS/Cemu_release bin/Cemu_x64.app/Contents/MacOS/Cemu_x64
-        sed -i '' 's/Cemu_release/Cemu_x64/g' bin/Cemu_x64.app/Contents/Info.plist
-        chmod a+x bin/Cemu_x64.app/Contents/MacOS/{Cemu_x64,update.sh}
+        mkdir bin/x64
+        mv bin/Cemu_release.app bin/x64/Cemu.app
+        mv bin/x64/Cemu.app/Contents/MacOS/Cemu_release bin/x64/Cemu.app/Contents/MacOS/Cemu
+        sed -i '' 's/Cemu_release/Cemu/g' bin/x64/Cemu.app/Contents/Info.plist
+        chmod a+x bin/x64/Cemu.app/Contents/MacOS/{Cemu,update.sh}
+        codesign --force --deep --sign - bin/x64/Cemu.app
 
     - name: "cmake arm64"
       run: |
@@ -274,44 +282,48 @@ jobs:
 
     - name: "Move arm64 artifact"
       run: |
-        mv bin/Cemu_release.app bin/Cemu_arm64.app
-        cp -R bin/Cemu_arm64.app bin/Cemu.app
-        mv bin/Cemu_arm64.app/Contents/MacOS/Cemu_release bin/Cemu_arm64.app/Contents/MacOS/Cemu_arm64
-        sed -i '' 's/Cemu_release/Cemu_arm64/g' bin/Cemu_arm64.app/Contents/Info.plist
-        chmod a+x bin/Cemu_arm64.app/Contents/MacOS/{Cemu_arm64,update.sh}
+        mkdir bin/arm64
+        mkdir bin/universal
+        mv bin/Cemu_release.app bin/arm64/Cemu.app
+        cp -R bin/arm64/Cemu.app bin/universal/Cemu.app
+        mv bin/arm64/Cemu.app/Contents/MacOS/Cemu_release bin/arm64/Cemu.app/Contents/MacOS/Cemu
+        sed -i '' 's/Cemu_release/Cemu/g' bin/arm64/Cemu.app/Contents/Info.plist
+        chmod a+x bin/arm64/Cemu.app/Contents/MacOS/{Cemu,update.sh}
+        codesign --force --deep --sign - bin/arm64/Cemu.app
 
     - name: "Create Universal binary"
       run: |
-        rm bin/Cemu.app/Contents/MacOS/Cemu_release
-        lipo -create -output bin/Cemu.app/Contents/MacOS/Cemu \
-        bin/Cemu_x64.app/Contents/MacOS/Cemu_x64 \
-        bin/Cemu_arm64.app/Contents/MacOS/Cemu_arm64
-        rm bin/Cemu.app/Contents/Frameworks/libusb-1.0.0.dylib
-        lipo -create -output bin/Cemu.app/Contents/Frameworks/libusb-1.0.0.dylib \
-        bin/Cemu_x64.app/Contents/Frameworks/libusb-1.0.0.dylib \
-        bin/Cemu_arm64.app/Contents/Frameworks/libusb-1.0.0.dylib
-        sed -i '' 's/Cemu_release/Cemu/g' bin/Cemu.app/Contents/Info.plist
-        chmod a+x bin/Cemu.app/Contents/MacOS/{Cemu,update.sh}
+        rm bin/universal/Cemu.app/Contents/MacOS/Cemu_release
+        lipo -create -output bin/universal/Cemu.app/Contents/MacOS/Cemu \
+        bin/x64/Cemu.app/Contents/MacOS/Cemu \
+        bin/arm64/Cemu.app/Contents/MacOS/Cemu
+        rm bin/universal/Cemu.app/Contents/Frameworks/libusb-1.0.0.dylib
+        lipo -create -output bin/universal/Cemu.app/Contents/Frameworks/libusb-1.0.0.dylib \
+        bin/x64/Cemu.app/Contents/Frameworks/libusb-1.0.0.dylib \
+        bin/arm64/Cemu.app/Contents/Frameworks/libusb-1.0.0.dylib
+        sed -i '' 's/Cemu_release/Cemu/g' bin/universal/Cemu.app/Contents/Info.plist
+        chmod a+x bin/universal/Cemu.app/Contents/MacOS/{Cemu,update.sh}
+        codesign --force --deep --sign - bin/universal/Cemu.app
 
     - name: Prepare artifacts
       run: |
         mkdir bin/Cemu_app_x64
-        mv bin/Cemu_x64.app bin/Cemu_app_x64/Cemu_x64.app
+        mv bin/x64/Cemu.app bin/Cemu_app_x64/Cemu.app
         mkdir bin/Cemu_app_arm64
-        mv bin/Cemu_arm64.app bin/Cemu_app_arm64/Cemu_arm64.app
-        mkdir bin/Cemu_app
-        mv bin/Cemu.app bin/Cemu_app/Cemu.app
+        mv bin/arm64/Cemu.app bin/Cemu_app_arm64/Cemu.app
+        mkdir bin/Cemu_app_universal
+        mv bin/universal/Cemu.app bin/Cemu_app_universal/Cemu.app
         ln -s /Applications bin/Cemu_app_x64/Applications
         ln -s /Applications bin/Cemu_app_arm64/Applications
-        ln -s /Applications bin/Cemu_app/Applications
+        ln -s /Applications bin/Cemu_app_universal/Applications
         hdiutil create ./bin/tmp.dmg -ov -volname "Cemu" -fs HFS+ -srcfolder "./bin/Cemu_app_x64"
         hdiutil convert ./bin/tmp.dmg -format UDZO -o bin/Cemu_x64.dmg
         rm bin/tmp.dmg
         hdiutil create ./bin/tmp.dmg -ov -volname "Cemu" -fs HFS+ -srcfolder "./bin/Cemu_app_arm64"
         hdiutil convert ./bin/tmp.dmg -format UDZO -o bin/Cemu_arm64.dmg
         rm bin/tmp.dmg
-        hdiutil create ./bin/tmp.dmg -ov -volname "Cemu" -fs HFS+ -srcfolder "./bin/Cemu_app"
-        hdiutil convert ./bin/tmp.dmg -format UDZO -o bin/Cemu_Universal.dmg
+        hdiutil create ./bin/tmp.dmg -ov -volname "Cemu" -fs HFS+ -srcfolder "./bin/Cemu_app_universal"
+        hdiutil convert ./bin/tmp.dmg -format UDZO -o bin/Cemu_universal.dmg
         rm bin/tmp.dmg
               
     - name: Upload x64 artifact
@@ -330,4 +342,4 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: cemu-bin-macos-universal
-        path: ./bin/Cemu_Universal.dmg
+        path: ./bin/Cemu_universal.dmg
