@@ -326,18 +326,6 @@ jobs:
         hdiutil convert ./bin/tmp.dmg -format UDZO -o bin/Cemu_universal.dmg
         rm bin/tmp.dmg
               
-    - name: Upload x64 artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: cemu-bin-macos-x64
-        path: ./bin/Cemu_x64.dmg
-
-    - name: Upload arm64 artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: cemu-bin-macos-arm64
-        path: ./bin/Cemu_arm64.dmg
-
     - name: Upload universal artifact
       uses: actions/upload-artifact@v4
       with:
