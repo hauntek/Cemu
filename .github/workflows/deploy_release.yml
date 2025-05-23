@@ -97,16 +97,6 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: cemu-bin-macos-x64
-          path: cemu-bin-macos-x64
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: cemu-bin-macos-arm64
-          path: cemu-bin-macos-arm64
-
-      - uses: actions/download-artifact@v4
-        with:
           name: cemu-bin-macos-universal
           path: cemu-bin-macos-universal
 
@@ -148,12 +138,6 @@ jobs:
           zip -9 -r upload/cemu-${{ env.CEMU_VERSION }}-ubuntu-22.04-x64.zip ${{ env.CEMU_FOLDER_NAME }}
           rm -r ./${{ env.CEMU_FOLDER_NAME }}
           
-      - name: Create release from macos-bin-x64
-        run: cp cemu-bin-macos-x64/Cemu_x64.dmg upload/cemu-${{ env.CEMU_VERSION }}-macos-12-x64.dmg
-
-      - name: Create release from macos-bin-arm64
-        run: cp cemu-bin-macos-arm64/Cemu_arm64.dmg upload/cemu-${{ env.CEMU_VERSION }}-macos-12-arm64.dmg
-
       - name: Create release from macos-bin-universal
         run: cp cemu-bin-macos-universal/Cemu_universal.dmg upload/cemu-${{ env.CEMU_VERSION }}-macos-12-universal.dmg
 
