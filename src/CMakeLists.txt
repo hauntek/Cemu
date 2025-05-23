@@ -100,14 +100,27 @@ if (MACOS_BUNDLE)
 			COMMAND ${CMAKE_COMMAND} ARGS -E copy_directory "${CMAKE_SOURCE_DIR}/bin/${folder}" "${CMAKE_SOURCE_DIR}/bin/${OUTPUT_NAME}.app/Contents/SharedSupport/${folder}")
 	endforeach(folder)
 
-	if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-	    set(LIBUSB_PATH "${CMAKE_BINARY_DIR}/vcpkg_installed/x64-osx/debug/lib/libusb-1.0.0.dylib")
+	if(CMAKE_OSX_ARCHITECTURES STREQUAL "arm64")
+		set(ARCH_STRING "arm64-osx")
 	else()
-	    set(LIBUSB_PATH "${CMAKE_BINARY_DIR}/vcpkg_installed/x64-osx/lib/libusb-1.0.0.dylib")
+		set(ARCH_STRING "x64-osx")
+	endif()
+
+	if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+		set(LIBUSB_PATH "${CMAKE_BINARY_DIR}/vcpkg_installed/${ARCH_STRING}/debug/lib/libusb-1.0.0.dylib")
+	else()
+		set(LIBUSB_PATH "${CMAKE_BINARY_DIR}/vcpkg_installed/${ARCH_STRING}/lib/libusb-1.0.0.dylib")
+	endif()
+
+	find_library(MOLTENVK_LIB MoltenVK)
+
+	if(NOT MOLTENVK_LIB)
+		set(MOLTENVK_LIB "/usr/local/lib/libMoltenVK.dylib")
+		message(STATUS "MoltenVK not found in standard paths, falling back to ${MOLTENVK_LIB}")
 	endif()
 
 	add_custom_command (TARGET CemuBin POST_BUILD
-		COMMAND ${CMAKE_COMMAND} ARGS -E copy "/usr/local/lib/libMoltenVK.dylib" "${CMAKE_SOURCE_DIR}/bin/${OUTPUT_NAME}.app/Contents/Frameworks/libMoltenVK.dylib"
+		COMMAND ${CMAKE_COMMAND} ARGS -E copy "${MOLTENVK_LIB}" "${CMAKE_SOURCE_DIR}/bin/${OUTPUT_NAME}.app/Contents/Frameworks/libMoltenVK.dylib"
 		COMMAND ${CMAKE_COMMAND} ARGS -E copy "${LIBUSB_PATH}" "${CMAKE_SOURCE_DIR}/bin/${OUTPUT_NAME}.app/Contents/Frameworks/libusb-1.0.0.dylib"
 		COMMAND ${CMAKE_COMMAND} ARGS -E copy "${CMAKE_SOURCE_DIR}/src/resource/update.sh" "${CMAKE_SOURCE_DIR}/bin/${OUTPUT_NAME}.app/Contents/MacOS/update.sh"
 		COMMAND bash -c "install_name_tool -add_rpath @executable_path/../Frameworks ${CMAKE_SOURCE_DIR}/bin/${OUTPUT_NAME}.app/Contents/MacOS/${OUTPUT_NAME}"

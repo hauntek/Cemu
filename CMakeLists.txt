@@ -238,7 +238,7 @@ endif()
 
 add_subdirectory("dependencies/ih264d" EXCLUDE_FROM_ALL)
 
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "(aarch64)|(AARCH64)")
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "(aarch64)|(AARCH64)|(arm64)|(ARM64)")
 	add_subdirectory("dependencies/xbyak_aarch64" EXCLUDE_FROM_ALL)
 endif()
 

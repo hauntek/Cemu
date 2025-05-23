@@ -182,6 +182,10 @@ target_sources(ih264d PRIVATE
 "decoder/arm/ih264d_function_selector_av8.c"
 "decoder/arm/ih264d_function_selector.c"
 )
+if(APPLE)
+    target_sources(ih264d PRIVATE "macos_arm_symbol_aliases.s")
+endif()
+
 target_compile_options(ih264d PRIVATE -DARMV8)
 else()
 message(FATAL_ERROR "ih264d unknown architecture: ${IH264D_ARCHITECTURE}")
