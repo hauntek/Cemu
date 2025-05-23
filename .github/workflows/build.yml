@@ -304,24 +304,13 @@ jobs:
         sed -i '' 's/Cemu_release/Cemu/g' bin/universal/Cemu.app/Contents/Info.plist
         chmod a+x bin/universal/Cemu.app/Contents/MacOS/{Cemu,update.sh}
         codesign --force --deep --sign - bin/universal/Cemu.app
+        rm -rf bin/x64/Cemu.app bin/arm64/Cemu.app
 
     - name: Prepare artifacts
       run: |
-        mkdir bin/Cemu_app_x64
-        mv bin/x64/Cemu.app bin/Cemu_app_x64/Cemu.app
-        mkdir bin/Cemu_app_arm64
-        mv bin/arm64/Cemu.app bin/Cemu_app_arm64/Cemu.app
         mkdir bin/Cemu_app_universal
         mv bin/universal/Cemu.app bin/Cemu_app_universal/Cemu.app
-        ln -s /Applications bin/Cemu_app_x64/Applications
-        ln -s /Applications bin/Cemu_app_arm64/Applications
         ln -s /Applications bin/Cemu_app_universal/Applications
-        hdiutil create ./bin/tmp.dmg -ov -volname "Cemu" -fs HFS+ -srcfolder "./bin/Cemu_app_x64"
-        hdiutil convert ./bin/tmp.dmg -format UDZO -o bin/Cemu_x64.dmg
-        rm bin/tmp.dmg
-        hdiutil create ./bin/tmp.dmg -ov -volname "Cemu" -fs HFS+ -srcfolder "./bin/Cemu_app_arm64"
-        hdiutil convert ./bin/tmp.dmg -format UDZO -o bin/Cemu_arm64.dmg
-        rm bin/tmp.dmg
         hdiutil create ./bin/tmp.dmg -ov -volname "Cemu" -fs HFS+ -srcfolder "./bin/Cemu_app_universal"
         hdiutil convert ./bin/tmp.dmg -format UDZO -o bin/Cemu_universal.dmg
         rm bin/tmp.dmg
