@@ -183,7 +183,7 @@ target_sources(ih264d PRIVATE
 "decoder/arm/ih264d_function_selector.c"
 )
 if(APPLE)
-    target_sources(ih264d PRIVATE "macos_arm_symbol_aliases.s")
+    target_sources(ih264d PRIVATE "common/armv8/ih264_macos_arm64_symbols.s")
 endif()
 
 target_compile_options(ih264d PRIVATE -DARMV8)
