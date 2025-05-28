@@ -100,23 +100,22 @@ if (MACOS_BUNDLE)
 			COMMAND ${CMAKE_COMMAND} ARGS -E copy_directory "${CMAKE_SOURCE_DIR}/bin/${folder}" "${CMAKE_SOURCE_DIR}/bin/${OUTPUT_NAME}.app/Contents/SharedSupport/${folder}")
 	endforeach(folder)
 
-	if(CMAKE_OSX_ARCHITECTURES STREQUAL "arm64")
-		set(ARCH_STRING "arm64-osx")
-	else()
-		set(ARCH_STRING "x64-osx")
-	endif()
-
 	if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-		set(LIBUSB_PATH "${CMAKE_BINARY_DIR}/vcpkg_installed/${ARCH_STRING}/debug/lib/libusb-1.0.0.dylib")
+		set(LIBUSB_PATH "${CMAKE_BINARY_DIR}/vcpkg_installed/${VCPKG_TARGET_TRIPLET}/debug/lib/libusb-1.0.0.dylib")
 	else()
-		set(LIBUSB_PATH "${CMAKE_BINARY_DIR}/vcpkg_installed/${ARCH_STRING}/lib/libusb-1.0.0.dylib")
+		set(LIBUSB_PATH "${CMAKE_BINARY_DIR}/vcpkg_installed/${VCPKG_TARGET_TRIPLET}/lib/libusb-1.0.0.dylib")
 	endif()
 
 	find_library(MOLTENVK_LIB MoltenVK)
 
 	if(NOT MOLTENVK_LIB)
-		set(MOLTENVK_LIB "/usr/local/lib/libMoltenVK.dylib")
-		message(STATUS "MoltenVK not found in standard paths, falling back to ${MOLTENVK_LIB}")
+		if (EXISTS "/usr/local/lib/libMoltenVK.dylib")
+			set(MOLTENVK_LIB "/usr/local/lib/libMoltenVK.dylib")
+		elseif (EXISTS "/opt/homebrew/lib/libMoltenVK.dylib")
+			set(MOLTENVK_LIB "/opt/homebrew/lib/libMoltenVK.dylib")
+		else()
+			message(FATAL_ERROR "MoltenVK not found in standard paths or fallback locations")
+		endif()
 	endif()
 
 	add_custom_command (TARGET CemuBin POST_BUILD
