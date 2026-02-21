@@ -3,6 +3,10 @@ name: Calculate Next Version from release history
 on:
   workflow_dispatch:
   workflow_call:
+    inputs:
+      version:
+        required: false
+        type: string
     outputs:
       next_version:
         description: "The next semantic version"
@@ -13,6 +17,9 @@ on:
       next_version_minor:
         description: "The next semantic version (minor)"
         value: ${{ jobs.calculate-version.outputs.next_version_minor }}
+      next_version_patch:
+        description: "The next semantic version (patch)"
+        value: ${{ jobs.calculate-version.outputs.next_version_patch }}
 
 jobs:
   calculate-version:
@@ -20,7 +27,8 @@ jobs:
     outputs:
       next_version: ${{ steps.calculate_next_version.outputs.next_version }}
       next_version_major: ${{ steps.calculate_next_version.outputs.next_version_major }}
-      next_version_minor: ${{ steps.calculate_next_version.outputs.next_version_minor }}      
+      next_version_minor: ${{ steps.calculate_next_version.outputs.next_version_minor }}
+      next_version_patch: ${{ steps.calculate_next_version.outputs.next_version_patch }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -28,6 +36,13 @@ jobs:
       - name: Get all releases
         id: get_all_releases
         run: |
+          # Check if the 'version' input exists and is not empty
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="v${{ github.event.inputs.version }}"
+            echo "tag=$VERSION" >> $GITHUB_OUTPUT
+            exit 0
+          else
+
           # Fetch all releases and check for API errors
           RESPONSE=$(curl -s -o response.json -w "%{http_code}" "https://api.github.com/repos/${{ github.repository }}/releases?per_page=100")
           if [ "$RESPONSE" -ne 200 ]; then
@@ -45,8 +60,9 @@ jobs:
             exit 1
           fi
 
-          echo "::set-output name=tag::$ALL_TAGS"
+          echo "tag=$ALL_TAGS" >> $GITHUB_OUTPUT
           # echo "tag=$ALL_TAGS" >> $GITHUB_STATE
+          fi
 
       - name: Calculate next semver minor
         id: calculate_next_version
@@ -59,16 +75,19 @@ jobs:
 
           MAJOR=${VERSION_PARTS[0]}
           MINOR=${VERSION_PARTS[1]}
+          PATCH=${VERSION_PARTS[2]}
 
           # increment the minor version
-          MINOR=$((MINOR + 1))
+          # MINOR=$((MINOR + 1))
 
-          NEXT_VERSION="${MAJOR}.${MINOR}"
+          NEXT_VERSION="${MAJOR}.${MINOR}.${PATCH}"
 
           echo "Major: $MAJOR"
           echo "Minor: $MINOR"
+          echo "Patch: $PATCH"
 
           echo "Next version: $NEXT_VERSION"
-          echo "::set-output name=next_version::$NEXT_VERSION"
-          echo "::set-output name=next_version_major::$MAJOR"
-          echo "::set-output name=next_version_minor::$MINOR"          
+          echo "next_version=$NEXT_VERSION" >> $GITHUB_OUTPUT
+          echo "next_version_major=$MAJOR" >> $GITHUB_OUTPUT
+          echo "next_version_minor=$MINOR" >> $GITHUB_OUTPUT
+          echo "next_version_patch=$PATCH" >> $GITHUB_OUTPUT
