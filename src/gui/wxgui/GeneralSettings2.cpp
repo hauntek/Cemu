@@ -288,13 +288,13 @@ wxPanel* GeneralSettings2::AddGeneralPage(wxNotebook* notebook)
 
 		mlcPathLineSizer->Add(m_mlc_path, 1, wxALL | wxEXPAND, 5);
 
-		auto* changePath = new wxButton(outerMlcBox, wxID_ANY, "Change");
+		auto* changePath = new wxButton(outerMlcBox, wxID_ANY, _("Change"));
 		changePath->Bind(wxEVT_BUTTON, &GeneralSettings2::OnMLCPathSelect, this);
 		mlcPathLineSizer->Add(changePath, 0, wxALL, 5);
 		if (LaunchSettings::GetMLCPath().has_value())
 			changePath->Disable();
 
-		auto* clearPath = new wxButton(outerMlcBox, wxID_ANY, "Clear custom path");
+		auto* clearPath = new wxButton(outerMlcBox, wxID_ANY, _("Clear custom path"));
 		clearPath->Bind(wxEVT_BUTTON, &GeneralSettings2::OnMLCPathClear, this);
 		mlcPathLineSizer->Add(clearPath, 0, wxALL, 5);
 		if (LaunchSettings::GetMLCPath().has_value() || !ActiveSettings::IsCustomMlcPath())

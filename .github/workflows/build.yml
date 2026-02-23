@@ -9,6 +9,9 @@ on:
       next_version_minor:
         required: false
         type: string
+      next_version_patch:
+        required: false
+        type: string
 
 env:
   VCPKG_ROOT: "${{github.workspace}}/dependencies/vcpkg"
@@ -45,8 +48,8 @@ jobs:
     - name: Setup build flags for version
       if: ${{ inputs.next_version_major != '' }}
       run: |
-        echo "[INFO] Version ${{ inputs.next_version_major }}.${{ inputs.next_version_minor }}"
-        echo "BUILD_FLAGS=${{ env.BUILD_FLAGS }} -DEMULATOR_VERSION_MAJOR=${{ inputs.next_version_major }} -DEMULATOR_VERSION_MINOR=${{ inputs.next_version_minor }}" >> $GITHUB_ENV
+        echo "[INFO] Version ${{ inputs.next_version_major }}.${{ inputs.next_version_minor }}.${{ inputs.next_version_patch }}"
+        echo "BUILD_FLAGS=${{ env.BUILD_FLAGS }} -DEMULATOR_VERSION_MAJOR=${{ inputs.next_version_major }} -DEMULATOR_VERSION_MINOR=${{ inputs.next_version_minor }} -DEMULATOR_VERSION_PATCH=${{ inputs.next_version_patch }}" >> $GITHUB_ENV
 
     - name: "Install system dependencies"
       run: |
@@ -144,8 +147,8 @@ jobs:
     - name: Setup build flags for version
       if: ${{ inputs.next_version_major != '' }}
       run: |
-        echo "[INFO] Version ${{ inputs.next_version_major }}.${{ inputs.next_version_minor }}"
-        echo "BUILD_FLAGS=${{ env.BUILD_FLAGS }} -DEMULATOR_VERSION_MAJOR=${{ inputs.next_version_major }} -DEMULATOR_VERSION_MINOR=${{ inputs.next_version_minor }}" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+        echo "[INFO] Version ${{ inputs.next_version_major }}.${{ inputs.next_version_minor }}.${{ inputs.next_version_patch }}"
+        echo "BUILD_FLAGS=${{ env.BUILD_FLAGS }} -DEMULATOR_VERSION_MAJOR=${{ inputs.next_version_major }} -DEMULATOR_VERSION_MINOR=${{ inputs.next_version_minor }} -DEMULATOR_VERSION_PATCH=${{ inputs.next_version_patch }}" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
 
     - name: "Setup cmake"
       uses: jwlawson/actions-setup-cmake@v2
@@ -190,7 +193,7 @@ jobs:
       shell: cmd
       run: |
         cd src\resource
-        makensis /DPRODUCT_VERSION=${{ inputs.next_version_major }}.${{ inputs.next_version_minor }} installer.nsi
+        makensis /DPRODUCT_VERSION=${{ inputs.next_version_major }}.${{ inputs.next_version_minor }}.${{ inputs.next_version_patch }} installer.nsi
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
@@ -202,18 +205,21 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: cemu-installer-windows-x64
-        path: ./src/resource/cemu-${{ inputs.next_version_major }}.${{ inputs.next_version_minor }}-windows-x64-installer.exe
+        path: ./src/resource/cemu-${{ inputs.next_version_major }}.${{ inputs.next_version_minor }}.${{ inputs.next_version_patch }}-windows-x64-installer.exe
 
   build-macos:
     runs-on: macos-14
-    strategy:
-      matrix:
-        arch: [x86_64, arm64]
     steps:
     - name: "Checkout repo"
       uses: actions/checkout@v4
       with:
         submodules: "recursive"
+
+    - name: "Select Xcode 16.2"
+      run: sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
+
+    - name: "Verify Xcode Version"
+      run: xcodebuild -version
 
     - name: Setup release mode parameters
       run: |
@@ -224,8 +230,8 @@ jobs:
     - name: Setup build flags for version
       if: ${{ inputs.next_version_major != '' }}
       run: |
-        echo "[INFO] Version ${{ inputs.next_version_major }}.${{ inputs.next_version_minor }}"
-        echo "BUILD_FLAGS=${{ env.BUILD_FLAGS }} -DEMULATOR_VERSION_MAJOR=${{ inputs.next_version_major }} -DEMULATOR_VERSION_MINOR=${{ inputs.next_version_minor }}" >> $GITHUB_ENV
+        echo "[INFO] Version ${{ inputs.next_version_major }}.${{ inputs.next_version_minor }}.${{ inputs.next_version_patch }}"
+        echo "BUILD_FLAGS=${{ env.BUILD_FLAGS }} -DEMULATOR_VERSION_MAJOR=${{ inputs.next_version_major }} -DEMULATOR_VERSION_MINOR=${{ inputs.next_version_minor }} -DEMULATOR_VERSION_PATCH=${{ inputs.next_version_patch }}" >> $GITHUB_ENV
 
     - name: "Install system dependencies"
       run: |
@@ -262,34 +268,81 @@ jobs:
         setapikey "${{ secrets.GITHUB_TOKEN }}" \
         -source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
 
-    - name: "cmake"
+    - name: "cmake x64"
       run: |
         mkdir build
         cd build
         cmake .. ${{ env.BUILD_FLAGS }} \
         -DCMAKE_BUILD_TYPE=${{ env.BUILD_MODE }} \
-        -DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch }} \
+        -DCMAKE_OSX_ARCHITECTURES=x86_64 \
         -DMACOS_BUNDLE=ON \
         -G Ninja
 
-    - name: "Build Cemu"
+    - name: "Build Cemu x64"
       run: |
         cmake --build build
 
+    - name: "Move x64 artifact"
+      run: |
+        mkdir bin/x64
+        mv bin/Cemu_release.app bin/x64/Cemu.app
+        mv bin/x64/Cemu.app/Contents/MacOS/Cemu_release bin/x64/Cemu.app/Contents/MacOS/Cemu
+        sed -i '' 's/Cemu_release/Cemu/g' bin/x64/Cemu.app/Contents/Info.plist
+        chmod a+x bin/x64/Cemu.app/Contents/MacOS/{Cemu,update.sh}
+        codesign --force --deep --sign - bin/x64/Cemu.app
+
+    - name: "cmake arm64"
+      run: |
+        rm -rf build
+        mkdir build
+        cd build
+        cmake .. ${{ env.BUILD_FLAGS }} \
+        -DCMAKE_BUILD_TYPE=${{ env.BUILD_MODE }} \
+        -DCMAKE_OSX_ARCHITECTURES=arm64 \
+        -DMACOS_BUNDLE=ON \
+        -G Ninja
+
+    - name: "Build Cemu arm64"
+      run: |
+        cmake --build build
+
+    - name: "Move arm64 artifact"
+      run: |
+        mkdir bin/arm64
+        mkdir bin/universal
+        mv bin/Cemu_release.app bin/arm64/Cemu.app
+        cp -R bin/arm64/Cemu.app bin/universal/Cemu.app
+        mv bin/arm64/Cemu.app/Contents/MacOS/Cemu_release bin/arm64/Cemu.app/Contents/MacOS/Cemu
+        sed -i '' 's/Cemu_release/Cemu/g' bin/arm64/Cemu.app/Contents/Info.plist
+        chmod a+x bin/arm64/Cemu.app/Contents/MacOS/{Cemu,update.sh}
+        codesign --force --deep --sign - bin/arm64/Cemu.app
+
+    - name: "Create Universal binary"
+      run: |
+        rm bin/universal/Cemu.app/Contents/MacOS/Cemu_release
+        lipo -create -output bin/universal/Cemu.app/Contents/MacOS/Cemu \
+        bin/x64/Cemu.app/Contents/MacOS/Cemu \
+        bin/arm64/Cemu.app/Contents/MacOS/Cemu
+        rm bin/universal/Cemu.app/Contents/Frameworks/libusb-1.0.0.dylib
+        lipo -create -output bin/universal/Cemu.app/Contents/Frameworks/libusb-1.0.0.dylib \
+        bin/x64/Cemu.app/Contents/Frameworks/libusb-1.0.0.dylib \
+        bin/arm64/Cemu.app/Contents/Frameworks/libusb-1.0.0.dylib
+        sed -i '' 's/Cemu_release/Cemu/g' bin/universal/Cemu.app/Contents/Info.plist
+        chmod a+x bin/universal/Cemu.app/Contents/MacOS/{Cemu,update.sh}
+        codesign --force --deep --sign - bin/universal/Cemu.app
+        rm -rf bin/x64/Cemu.app bin/arm64/Cemu.app
+
     - name: Prepare artifact
       run: |
-        mkdir bin/Cemu_app
-        mv bin/Cemu_release.app bin/Cemu_app/Cemu.app
-        mv bin/Cemu_app/Cemu.app/Contents/MacOS/Cemu_release bin/Cemu_app/Cemu.app/Contents/MacOS/Cemu
-        sed -i '' 's/Cemu_release/Cemu/g' bin/Cemu_app/Cemu.app/Contents/Info.plist
-        chmod a+x bin/Cemu_app/Cemu.app/Contents/MacOS/{Cemu,update.sh}
-        ln -s /Applications bin/Cemu_app/Applications
-        hdiutil create ./bin/tmp.dmg -ov -volname "Cemu" -fs HFS+ -srcfolder "./bin/Cemu_app"
-        hdiutil convert ./bin/tmp.dmg -format UDZO -o bin/Cemu.dmg
+        mkdir bin/Cemu_app_universal
+        mv bin/universal/Cemu.app bin/Cemu_app_universal/Cemu.app
+        ln -s /Applications bin/Cemu_app_universal/Applications
+        hdiutil create ./bin/tmp.dmg -ov -volname "Cemu" -fs HFS+ -srcfolder "./bin/Cemu_app_universal"
+        hdiutil convert ./bin/tmp.dmg -format UDZO -o bin/Cemu_universal.dmg
         rm bin/tmp.dmg
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: cemu-bin-macos-${{ matrix.arch }}
-        path: ./bin/Cemu.dmg
+        name: cemu-bin-macos-universal
+        path: ./bin/Cemu_universal.dmg
