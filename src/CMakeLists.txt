@@ -1,6 +1,7 @@
 project(cemuMain)
 
 option(CEMU_CXX_FLAGS "Additional flags used for compiling Cemu source code")
+separate_arguments(CEMU_CXX_FLAGS NATIVE_COMMAND ${CEMU_CXX_FLAGS})
 if(CEMU_CXX_FLAGS)
 	add_compile_options(${CEMU_CXX_FLAGS})
 endif()
@@ -211,6 +212,10 @@ set_target_properties(CemuBin PROPERTIES
 	OUTPUT_NAME "${OUTPUT_NAME}"
 )
 
+if(ENABLE_SDL)
+	target_link_libraries(CemuBin PRIVATE SDL3::SDL3)
+endif()
+
 target_link_libraries(CemuBin PRIVATE
 	CemuAudio
 	CemuCafe
@@ -221,10 +226,6 @@ target_link_libraries(CemuBin PRIVATE
 	CemuInput
 	CemuUtil
 )
-
-if(ENABLE_SDL)
-	target_link_libraries(CemuBin PRIVATE SDL3::SDL3)
-endif()
 
 if(UNIX AND NOT APPLE)
 	# due to nasm output some linkers will make stack executable
