@@ -518,14 +518,14 @@ bool MainWindow::FileLoad(const fs::path launchPath, wxLaunchGameEvent::INITIATE
 		else if (r == CafeSystem::PREPARE_STATUS_CODE::UNABLE_TO_MOUNT)
 		{
 			wxString t = _("Unable to mount title.\nMake sure the configured game paths are still valid and refresh the game list.\n\nFile which failed to load:\n");
-			t.append(_pathToUtf8(launchPath));
+			t.append(wxHelper::FromPath(launchPath));
 			wxMessageBox(t, _("Error"), wxOK | wxCENTRE | wxICON_ERROR);
 			return false;
 		}
 		else if (r != CafeSystem::PREPARE_STATUS_CODE::SUCCESS)
 		{
 			wxString t = _("Failed to launch game.");
-			t.append(_pathToUtf8(launchPath));
+			t.append(wxHelper::FromPath(launchPath));
 			wxMessageBox(t, _("Error"), wxOK | wxCENTRE | wxICON_ERROR);
 			return false;
 		}
@@ -542,7 +542,7 @@ bool MainWindow::FileLoad(const fs::path launchPath, wxLaunchGameEvent::INITIATE
 			{
 				cemu_assert_debug(false); // todo
 				wxString t = _("Failed to launch executable. Path: ");
-				t.append(_pathToUtf8(launchPath));
+				t.append(wxHelper::FromPath(launchPath));
 				wxMessageBox(t, _("Error"), wxOK | wxCENTRE | wxICON_ERROR);
 				return false;
 			}
@@ -550,14 +550,14 @@ bool MainWindow::FileLoad(const fs::path launchPath, wxLaunchGameEvent::INITIATE
 		else if (initiatedBy == wxLaunchGameEvent::INITIATED_BY::GAME_LIST)
 		{
 			wxString t = _("Unable to launch title.\nMake sure the configured game paths are still valid and refresh the game list.\n\nPath which failed to load:\n");
-			t.append(_pathToUtf8(launchPath));
+			t.append(wxHelper::FromPath(launchPath));
 			wxMessageBox(t, _("Error"), wxOK | wxCENTRE | wxICON_ERROR);
 			return false;
 		}
 		else
 		{
 			wxString t = _("Unable to launch game\nPath:\n");
-			t.append(_pathToUtf8(launchPath));
+			t.append(wxHelper::FromPath(launchPath));
 			if(launchTitle.GetInvalidReason() == TitleInfo::InvalidReason::NO_DISC_KEY)
 			{
 				t.append("\n\n");
@@ -2330,6 +2330,7 @@ void MainWindow::RecreateMenu()
 	logCosModulesMenu->AppendCheckItem(MAINFRAME_MENU_ID_DEBUG_LOGGING0 + stdx::to_underlying(LogType::SWKBD), _("swkbd API"))->Check(cemuLog_isLoggingEnabled(LogType::SWKBD));
 	logCosModulesMenu->AppendCheckItem(MAINFRAME_MENU_ID_DEBUG_LOGGING0 + stdx::to_underlying(LogType::SoundAPI), _("Audio API"))->Check(cemuLog_isLoggingEnabled(LogType::SoundAPI));
 	logCosModulesMenu->AppendCheckItem(MAINFRAME_MENU_ID_DEBUG_LOGGING0 + stdx::to_underlying(LogType::InputAPI), _("Input API"))->Check(cemuLog_isLoggingEnabled(LogType::InputAPI));
+	logCosModulesMenu->AppendCheckItem(MAINFRAME_MENU_ID_DEBUG_LOGGING0 + stdx::to_underlying(LogType::DSUProvider), _("DSU client"))->Check(cemuLog_isLoggingEnabled(LogType::DSUProvider));
 
 	debugLoggingMenu->AppendSubMenu(logCosModulesMenu, _("&CafeOS modules logging"));
 	debugLoggingMenu->AppendSeparator();

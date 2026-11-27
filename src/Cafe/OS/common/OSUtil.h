@@ -3,8 +3,6 @@
 #include "Cafe/HW/Espresso/PPCState.h"
 #include "Cafe/HW/MMU/MMU.h"
 
-#include <fmt/ostream.h>
-#include <fmt/compile.h>
 #include <fmt/ranges.h>
 
 class cafeExportParamWrapper
@@ -253,6 +251,8 @@ void cafeCallableExportWrapper(PPCInterpreter_t* hCPU)
 	// return from func
 	hCPU->instructionPointer = hCPU->spr.LR;
 }
+
+uint32 RPLLoader_MakePPCCallable(void(*ppcCallableExport)(struct PPCInterpreter_t* hCPU)); // declare to avoid having to include all of rpl.h
 
 template<auto fn>
 MPTR makeCallableExport()

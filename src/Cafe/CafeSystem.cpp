@@ -1,6 +1,5 @@
 #include "Cafe/OS/common/OSCommon.h"
 #include "WindowSystem.h"
-#include "Cafe/OS/libs/gx2/GX2.h"
 #include "Cafe/GameProfile/GameProfile.h"
 #include "Cafe/HW/Espresso/Interpreter/PPCInterpreterInternal.h"
 #include "Cafe/HW/Espresso/Recompiler/PPCRecompiler.h"
@@ -19,6 +18,7 @@
 #include "Cafe/TitleList/TitleList.h"
 #include "Cafe/TitleList/GameInfo.h"
 #include "Cafe/OS/libs/coreinit/coreinit_Alarm.h"
+#include "Cafe/OS/libs/coreinit/coreinit_IPC.h"
 #include "Cafe/OS/libs/snd_core/ax.h"
 #include "Cafe/OS/RPL/rpl.h"
 #include "Cafe/HW/Latte/Core/Latte.h"
@@ -27,6 +27,7 @@
 #include "GamePatch.h"
 #include "HW/Espresso/Debugger/GDBStub.h"
 
+#include "Common/CafeStaticVar.h"
 #include "Cafe/IOSU/legacy/iosu_ioctl.h"
 #include "Cafe/IOSU/legacy/iosu_act.h"
 #include "Cafe/IOSU/legacy/iosu_fpd.h"
@@ -446,6 +447,7 @@ namespace CafeSystem
 
 	bool sSystemRunning = false;
 	TitleId sForegroundTitleId = 0;
+	static TitleCompatibility s_foregroundTitleCompatibility = TitleCompatibility::Default;
 
 	GameInfo2 sGameInfo_ForegroundTitle;
 
@@ -553,8 +555,9 @@ namespace CafeSystem
 			platform = "Linux (AppImage)";
 		else if (getenv ("SNAP"))
 			platform = "Linux (Snap)";
-		else if (platform = getenv ("container"))
+		else if (getenv ("container"))
 		{
+			platform = getenv ("container");
 			if (strcmp (platform, "flatpak") == 0)
 				platform = "Linux (Flatpak)";
 		}
@@ -624,9 +627,6 @@ namespace CafeSystem
 		cemuLog_log(LogType::Force, "Used CPU extensions: {}", g_CPUFeatures.GetCommaSeparatedExtensionList());
 		// misc systems
 		rplSymbolStorage_init();
-		// allocate memory for all SysAllocators
-		// must happen before COS module init, but also before iosu::kernel::Initialize()
-		SysAllocatorContainer::GetInstance().Initialize();
 		// init IOSU modules
 		for(auto& module : s_iosuModules)
 			module->SystemLaunch();
@@ -664,6 +664,7 @@ namespace CafeSystem
 		// shutdown IOSU modules
 		for(auto it = s_iosuModules.rbegin(); it != s_iosuModules.rend(); ++it)
 			(*it)->SystemExit();
+		cemu_assert_debug(!IOSUStaticData::HasAnyAllocations()); // check for leak
         s_initialized = false;
     }
 
@@ -698,6 +699,61 @@ namespace CafeSystem
 		for (const auto& [_, emulatedPath] : LaunchSettings::CosMounts())
 		{
 			fsc_unmount(boost::nowide::narrow(emulatedPath), FSC_PRIORITY_BASE);
+		}
+	}
+
+	static void IdentifyTitle(TitleId titleId)
+	{
+		s_foregroundTitleCompatibility = TitleCompatibility::Default;
+		switch (titleId)
+		{
+		case 0x0005000010100600: // Tekken Tag Tournament 2 (JP)
+		case 0x000500001010F800: // Tekken Tag Tournament 2 (EU)
+		case 0x0005000010110000: // Tekken Tag Tournament 2 (US)
+			s_foregroundTitleCompatibility = TitleCompatibility::TekkenTagTournament2;
+			break;
+		case 0x000500001017BF00: // Art Academy: Home Studio (US)
+		case 0x000500001017BE00: // Art Academy: Home Studio (JP)
+		case 0x000500001017B500: // Art Academy: Atelier (EU)
+			s_foregroundTitleCompatibility = TitleCompatibility::ArtAcademyHomeStudio;
+			break;
+		case 0x0005000010101C00: // New Super Mario Bros. U (JP)
+		case 0x0005000010101D00: // New Super Mario Bros. U (US)
+		case 0x0005000010101E00: // New Super Mario Bros. U (EU)
+			s_foregroundTitleCompatibility = TitleCompatibility::NewSuperMarioBrosU;
+			break;
+		case 0x000500001014B700: // New Super Mario Bros. U + New Super Luigi U (US)
+		case 0x000500001014B800: // New Super Mario Bros. U + New Super Luigi U (EU)
+			s_foregroundTitleCompatibility = TitleCompatibility::NewSuperMarioBrosUAndNewSuperLuigiU;
+			break;
+		case 0x0005000010142300: // New Super Luigi U (US)
+		case 0x0005000010142400: // New Super Luigi U (EU)
+			s_foregroundTitleCompatibility = TitleCompatibility::NewSuperLuigiU;
+			break;
+		case 0x00050000101D0300: // Project Zero: Maiden of Black Water (EU)
+		case 0x00050000101D0600: // Fatal Frame: Maiden of Black Water (US)
+		case 0x000500001014D200: // Project Zero: Maiden of Black Water (JP)
+		case 0x00050000101D3F00: // Project Zero: Maiden of Black Water (Trial, EU)
+			s_foregroundTitleCompatibility = TitleCompatibility::FatalFrameMaidenOfBlackWater;
+			break;
+		case 0x0005000010147900: // PAC-MAN and the Ghostly Adventures (EU)
+		case 0x0005000010146300: // PAC-MAN and the Ghostly Adventures (US)
+			s_foregroundTitleCompatibility = TitleCompatibility::PacManAndTheGhostlyAdventures;
+			break;
+		case 0x000500001017E500: // PAC-MAN and the Ghostly Adventures 2 (EU)
+		case 0x000500001017E600: // PAC-MAN and the Ghostly Adventures 2 (US)
+			s_foregroundTitleCompatibility = TitleCompatibility::PacManAndTheGhostlyAdventures2;
+			break;
+		case 0x000500001014E100: // Adventure Time: Explore the Dungeon Because I Don't Know! (EU)
+		case 0x0005000010144000: // Adventure Time: Explore the Dungeon Because I Don't Know! (US)
+			s_foregroundTitleCompatibility = TitleCompatibility::AdventureTimeExploreTheDungeon;
+			break;
+		case 0x0005000010129200: // DuckTales Remastered (EU)
+		case 0x0005000010129000: // DuckTales Remastered (US)
+			s_foregroundTitleCompatibility = TitleCompatibility::DuckTalesRemastered;
+			break;
+		default:
+			break;
 		}
 	}
 
@@ -759,6 +815,7 @@ namespace CafeSystem
 		else
 			cemuLog_log(LogType::Force, "DLC: Not present");
 		sForegroundTitleId = titleId;
+		IdentifyTitle(titleId);
 		return PREPARE_STATUS_CODE::SUCCESS;
 	}
 
@@ -834,6 +891,7 @@ namespace CafeSystem
 
 	PREPARE_STATUS_CODE PrepareForegroundTitle(TitleId titleId)
 	{
+		s_foregroundTitleCompatibility = TitleCompatibility::Default;
 		CafeTitleList::WaitForMandatoryScan();
 		sLaunchModeIsStandalone = false;
 		s_foregroundReturnStatus = std::nullopt;
@@ -861,6 +919,7 @@ namespace CafeSystem
 
 	PREPARE_STATUS_CODE PrepareForegroundTitleFromStandaloneRPX(const fs::path& path)
 	{
+		s_foregroundTitleCompatibility = TitleCompatibility::Default;
 		sLaunchModeIsStandalone = true;
 		cemuLog_log(LogType::Force, "Launching executable in standalone mode due to incorrect layout or missing meta files");
 		fs::path executablePath = path;
@@ -934,6 +993,11 @@ namespace CafeSystem
 	{
 		cemu_assert_debug(sForegroundTitleId != 0);
 		return sForegroundTitleId;
+	}
+
+	TitleCompatibility GetForegroundTitleCompatibility()
+	{
+		return s_foregroundTitleCompatibility;
 	}
 
 	uint16 GetForegroundTitleVersion()
@@ -1068,6 +1132,7 @@ namespace CafeSystem
 			return;
 		coreinit::OSSchedulerEnd();
 		Latte_Stop();
+		coreinit::IPCCloseAllHandles();
 		// reset Cafe OS userspace modules
 		snd_core::reset();
 		coreinit::OSAlarm_Shutdown();
@@ -1087,6 +1152,7 @@ namespace CafeSystem
 		DestroyMemorySpace();
 		LaunchSettings::ClearCosArgstr();
 		sSystemRunning = false;
+		s_foregroundTitleCompatibility = TitleCompatibility::Default;
 	}
 
 	/* Virtual mlc storage */

@@ -1,8 +1,12 @@
 #pragma once
 #include "Cafe/OS/libs/snd_core/ax.h"
 
+class COSStaticData;
+template<typename T, size_t count, size_t alignment> class CafeStaticVar;
+
 namespace snd_core
 {
+	extern COSStaticData g_sndStaticData;
 	struct sndGeneric_t
 	{
 		bool isInitialized{false};
@@ -46,7 +50,7 @@ namespace snd_core
 
 	struct axADPCMInternal_t
 	{
-		/* +0x00 | +0x190 */ uint16 coef[16];
+		/* +0x00 | +0x190 */ sint16be coef[16];
 		/* +0x20 | +0x1B0 */ uint16 gain;
 		/* +0x22 | +0x1B2 */ uint16 scale;
 		/* +0x24 | +0x1B4 */ uint16 yn1;
@@ -108,13 +112,13 @@ namespace snd_core
 		/* +0x00A */ uint16 srcTapFilter; // AX_FILTER_TAP_*
 		/* +0x00C */ uint16be mixerSelect;
 		/* +0x00E */ uint16 voiceType;
-		/* +0x010 */ uint16 deviceMixMaskTV[4];
-		/* +0x018 */ uint16 deviceMixMaskDRC[4 * 2];
-		/* +0x028 */ AXCHMIX_DEPR deviceMixTV[AX_BUS_COUNT * AX_TV_CHANNEL_COUNT]; // TV device mix
-		/* +0x088 */ AXCHMIX_DEPR deviceMixDRC[AX_BUS_COUNT * AX_DRC_CHANNEL_COUNT * 2]; // DRC device mix
-		/* +0x108 */ AXCHMIX_DEPR deviceMixRMT[0x40 / 4]; // RMT device mix (size unknown)
+		/* +0x010 */ uint16be deviceMixMaskTV[4];
+		/* +0x018 */ uint16be deviceMixMaskDRC[4 * 2];
+		/* +0x028 */ AXCHMIX2 deviceMixTV[AX_BUS_COUNT * AX_TV_CHANNEL_COUNT]; // TV device mix
+		/* +0x088 */ AXCHMIX2 deviceMixDRC[AX_BUS_COUNT * AX_DRC_CHANNEL_COUNT * 2]; // DRC device mix
+		/* +0x108 */ AXCHMIX2 deviceMixRMT[0x40 / 4]; // RMT device mix (size unknown)
 		/* +0x148 */ uint16 reserved148_voiceRmtOn;
-		/* +0x14A */ uint16 deviceMixMaskRMT[0x10];
+		/* +0x14A */ uint16be deviceMixMaskRMT[0x10];
 		/* +0x16A */ uint16 playbackState;
 		// itd (0x16C - 0x1B4?)
 		/* +0x16C */ uint16 reserved16C;
@@ -218,7 +222,7 @@ namespace snd_core
 	void AXAux_incrementBufferIndex();
 
 	// internal mix buffers
-	extern SysAllocator<sint32, AX_SAMPLES_MAX * AX_TV_CHANNEL_COUNT> __AXTVOutputBuffer;
-	extern SysAllocator<sint32, AX_SAMPLES_MAX * AX_DRC_CHANNEL_COUNT * 2> __AXDRCOutputBuffer;
+	extern CafeStaticVar<sint32, AX_SAMPLES_MAX * AX_TV_CHANNEL_COUNT, 32> __AXTVOutputBuffer;
+	extern CafeStaticVar<sint32, AX_SAMPLES_MAX * AX_DRC_CHANNEL_COUNT * 2, 32> __AXDRCOutputBuffer;
 
 }

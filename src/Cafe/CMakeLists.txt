@@ -73,7 +73,6 @@ add_library(CemuCafe
   HW/Espresso/Recompiler/IML/IMLInstruction.cpp
   HW/Espresso/Recompiler/IML/IMLInstruction.h
   HW/Espresso/Recompiler/IML/IMLDebug.cpp
-  HW/Espresso/Recompiler/IML/IMLAnalyzer.cpp
   HW/Espresso/Recompiler/IML/IMLOptimizer.cpp
   HW/Espresso/Recompiler/IML/IMLRegisterAllocator.cpp
   HW/Espresso/Recompiler/IML/IMLRegisterAllocator.h
@@ -336,6 +335,7 @@ add_library(CemuCafe
   OS/libs/gx2/GX2_Texture.cpp
   OS/libs/gx2/GX2_Texture.h
   OS/libs/gx2/GX2_TilingAperture.cpp
+  OS/libs/gx2/GX2_TilingAperture.h
   OS/libs/h264_avc/H264Dec.cpp
   OS/libs/h264_avc/H264DecBackendAVC.cpp
   OS/libs/h264_avc/h264dec.h
@@ -356,7 +356,6 @@ add_library(CemuCafe
   OS/libs/nfc/TLV.cpp
   OS/libs/nfc/TLV.h
   OS/libs/nlibcurl/nlibcurl.cpp
-  OS/libs/nlibcurl/nlibcurlDebug.hpp
   OS/libs/nlibcurl/nlibcurl.h
   OS/libs/nlibnss/nlibnss.cpp
   OS/libs/nlibnss/nlibnss.h

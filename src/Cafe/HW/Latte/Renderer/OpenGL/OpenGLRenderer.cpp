@@ -1,6 +1,11 @@
 #include "Cafe/HW/Latte/Renderer/OpenGL/OpenGLRenderer.h"
 #include "WindowSystem.h"
 
+#include "Cafe/HW/Latte/Core/LatteTextureLoader.h"
+#if BOOST_OS_WINDOWS
+#include "util/DXGIWrapper/DXGIWrapper.h"
+#endif
+
 #include "Cafe/HW/Latte/Core/LatteRingBuffer.h"
 #include "Cafe/HW/Latte/Core/LatteDraw.h"
 #include "Cafe/HW/Latte/Core/LatteOverlay.h"
@@ -1307,6 +1312,9 @@ void OpenGLRenderer::texture_copyImageSubData(LatteTexture* src, sint32 srcMip, 
 
 LatteTextureReadbackInfo* OpenGLRenderer::texture_createReadback(LatteTextureView* textureView)
 {
+	LatteTextureGL* textureGL = static_cast<LatteTextureGL*>(textureView->baseTexture);
+	if (Latte::GetHWFormat(textureView->format) == Latte::E_HWFMT::HWFMT_BC1 && (textureGL->isAlternativeFormat || !glGetCompressedTextureSubImage))
+		return nullptr;
 	return new LatteTextureReadbackInfoGL(textureView);
 }
 
@@ -1787,7 +1795,7 @@ void OpenGLRenderer::renderstate_updateBlendingAndColorControl()
 			//else
 			glPolygonOffset(frontScale, frontOffset);
 
-			prevPolygonFrontOffsetU32 = LatteGPUState.contextNew.PA_SU_POLY_OFFSET_FRONT_SCALE.getRawValue();
+			prevPolygonFrontOffsetU32 = LatteGPUState.contextNew.PA_SU_POLY_OFFSET_FRONT_OFFSET.getRawValue();
 			prevPolygonFrontScaleU32 = LatteGPUState.contextNew.PA_SU_POLY_OFFSET_FRONT_SCALE.getRawValue();
 			prevPolygonClampU32 = LatteGPUState.contextNew.PA_SU_POLY_OFFSET_CLAMP.getRawValue();
 		}

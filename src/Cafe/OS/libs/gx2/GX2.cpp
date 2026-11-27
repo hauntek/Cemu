@@ -1,10 +1,7 @@
 #include "Cafe/OS/common/OSCommon.h"
-#include "Cafe/HW/Latte/ISA/RegDefines.h"
 #include "Cafe/HW/Espresso/PPCCallback.h"
 #include "GX2.h"
 #include "Cafe/HW/Latte/Core/Latte.h"
-#include "Cafe/OS/libs/coreinit/coreinit_Time.h"
-#include "Cafe/OS/libs/coreinit/coreinit_Thread.h"
 #include "Cafe/CafeSystem.h"
 #include "Cafe/HW/Latte/Core/LattePM4.h"
 #include "input/InputManager.h"
@@ -21,8 +18,7 @@
 #include "GX2_Surface.h"
 #include "GX2_Surface_Copy.h"
 #include "GX2_Texture.h"
-
-#include <cinttypes>
+#include "GX2_TilingAperture.h"
 
 #define GX2_TV_RENDER_NONE			0
 #define GX2_TV_RENDER_480			1
@@ -311,8 +307,12 @@ void gx2Export_GX2SetSemaphore(PPCInterpreter_t* hCPU)
 	osLib_returnFromFunction(hCPU, 0);
 }
 
+extern MPTR gx2CurrentContextStateMPTR;
+
 namespace GX2
 {
+	constinit COSStaticData s_gx2StaticData;
+
 	class : public COSModule
 	{
 		public:
@@ -326,8 +326,17 @@ namespace GX2
 			return "gx2";
 		}
 
+		void RPLUnmapped() override
+		{
+			GX2ApertureShutdown();
+			s_gx2StaticData.Deallocate();
+		}
+
 		void RPLMapped() override
 		{
+			gx2CurrentContextStateMPTR = MPTR_NULL;
+			lastSwapTime = 0;
+			s_gx2StaticData.Allocate();
 			osLib_addFunction("gx2", "GX2GetContextStateDisplayList", gx2Export_GX2GetContextStateDisplayList);
 
 			// swap, vsync & timing
@@ -342,10 +351,11 @@ namespace GX2
 			osLib_addFunction("gx2", "GX2SetGeometryShader", gx2Export_GX2SetGeometryShader);
 			osLib_addFunction("gx2", "GX2SetComputeShader", gx2Export_GX2SetComputeShader);
 			osLib_addFunction("gx2", "GX2SetVertexUniformBlock", gx2Export_GX2SetVertexUniformBlock);
-			osLib_addFunction("gx2", "GX2RSetVertexUniformBlock", gx2Export_GX2RSetVertexUniformBlock);
-
 			osLib_addFunction("gx2", "GX2SetPixelUniformBlock", gx2Export_GX2SetPixelUniformBlock);
 			osLib_addFunction("gx2", "GX2SetGeometryUniformBlock", gx2Export_GX2SetGeometryUniformBlock);
+
+			osLib_addFunction("gx2", "GX2RSetVertexUniformBlock", gx2Export_GX2RSetVertexUniformBlock);
+			osLib_addFunction("gx2", "GX2RSetPixelUniformBlock", gx2Export_GX2RSetPixelUniformBlock);
 
 			osLib_addFunction("gx2", "GX2CalcGeometryShaderInputRingBufferSize", gx2Export_GX2CalcGeometryShaderInputRingBufferSize);
 			osLib_addFunction("gx2", "GX2CalcGeometryShaderOutputRingBufferSize", gx2Export_GX2CalcGeometryShaderOutputRingBufferSize);
@@ -375,9 +385,6 @@ namespace GX2
 			osLib_addFunction("gx2", "GX2SampleTopGPUCycle", gx2Export_GX2SampleTopGPUCycle);
 			osLib_addFunction("gx2", "GX2SampleBottomGPUCycle", gx2Export_GX2SampleBottomGPUCycle);
 
-			osLib_addFunction("gx2", "GX2AllocateTilingApertureEx", gx2Export_GX2AllocateTilingApertureEx);
-			osLib_addFunction("gx2", "GX2FreeTilingAperture", gx2Export_GX2FreeTilingAperture);
-
 			// context state
 			osLib_addFunction("gx2", "GX2SetDefaultState", gx2Export_GX2SetDefaultState);
 			osLib_addFunction("gx2", "GX2SetupContextStateEx", gx2Export_GX2SetupContextStateEx);
@@ -392,6 +399,7 @@ namespace GX2
 			GX2::GX2SurfaceInit();
 			GX2::GX2SurfaceCopyInit();
 			GX2::GX2TextureInit();
+			GX2::GX2ApertureInit();
 			GX2::GX2StateInit();
 			GX2::GX2ShaderInit();
 			GX2::GX2EventInit();

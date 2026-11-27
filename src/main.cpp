@@ -26,6 +26,8 @@
 #include "audio/IAudioAPI.h"
 #include "audio/IAudioInputAPI.h"
 #if BOOST_OS_WINDOWS
+#include <WinSock2.h>
+#include <objbase.h>
 #pragma comment(lib,"Dbghelp.lib")
 #endif
 
@@ -124,6 +126,11 @@ void CemuCommonInit()
 
 	WindowsInitCwd();
     ExceptionHandler_Init();
+#if BOOST_OS_WINDOWS
+	// init sockets
+	WSADATA wsaData;
+	WSAStartup(MAKEWORD(2, 2), &wsaData);
+#endif
 	// read config
 	GetConfigHandle().Load();
 	if (NetworkConfig::XMLExists())

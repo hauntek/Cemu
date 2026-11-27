@@ -168,7 +168,7 @@ namespace snd_core
 
 	struct AXPBADPCM_t
 	{
-		uint16 a[16];
+		sint16be coef[16];
 		uint16 gain;
 		uint16 scale;
 		uint16 yn1;
@@ -196,12 +196,6 @@ namespace snd_core
 		}
 	};
 
-	struct AXCHMIX_DEPR
-	{
-		uint16 vol;
-		sint16 delta;
-	};
-
 	struct AXCHMIX2
 	{
 		uint16be vol;
@@ -225,7 +219,9 @@ namespace snd_core
 
 	sint32 AXVoiceBegin(AXVPB* voice);
 	sint32 AXVoiceEnd(AXVPB* voice);
-	sint32 AXSetVoiceDeviceMix(AXVPB* vpb, sint32 device, sint32 deviceIndex, AXCHMIX_DEPR* mix);
+	sint32 AXSetVoiceDeviceMix(AXVPB* vpb, sint32 device, sint32 deviceIndex, const AXCHMIX2* mix);
+	sint32 AXSetVoiceMix(AXVPB* vpb, const AXCHMIX2* mix);
+	sint32 AXSetVoiceDRCMix(AXVPB* vpb, const AXCHMIX2* mix);
 	void AXSetVoiceState(AXVPB* vpb, sint32 voiceState);
 	sint32 AXIsVoiceRunning(AXVPB* vpb);
 	void AXSetVoiceType(AXVPB* vpb, uint16 voiceType);
@@ -350,26 +346,28 @@ namespace snd_core
 	struct AXDSPADPCM
 	{
 		/* +0x00 */ uint32be numSamples;
-		/* +0x04 */ uint32be ukn04;
+		/* +0x04 */ uint32be numAdpcmNibbles;
 		/* +0x08 */ uint32be sampleRate;
 		/* +0x0C */ uint16be isLooped;
 		/* +0x0E */ uint16be format;
-		/* +0x10 */ uint32be ukn10;
-		/* +0x14 */ uint32be ukn14;
-		/* +0x18 */ uint32be ukn18;
-		/* +0x1C */ uint16be coef[16];
+		/* +0x10 */ uint32be loopOffset;
+		/* +0x14 */ uint32be endOffset;
+		/* +0x18 */ uint32be currentOffset;
+		/* +0x1C */ sint16be coef[16];
 		/* +0x3C */ uint16be gain;
 		/* +0x3E */ uint16be scale;
-		/* +0x40 */ uint16be yn1;
-		/* +0x42 */ uint16be yn2;
-		/* +0x44 */ uint16be ukn44;
-		/* +0x46 */ uint16be ukn46;
-		/* +0x48 */ uint16be ukn48;
+		/* +0x40 */ sint16be yn1;
+		/* +0x42 */ sint16be yn2;
+		/* +0x44 */ uint16be loopScale;
+		/* +0x46 */ sint16be loopYn1;
+		/* +0x48 */ sint16be loopYn2;
 		/* +0x4A */ uint16be channelCount;
 		/* +0x4C */ uint16be ukn4C;
 		/* +0x4E */ uint8 _padding4E[0x12];
 	};
 	static_assert(sizeof(AXDSPADPCM) == 0x60);
+
+	sint32 AXDecodeAdpcmData(uint8* input, AXDSPADPCM* info, sint32 sampleCount, sint16be* output);
 
 	void AXMultiVoice_Init();
 
@@ -387,6 +385,7 @@ namespace snd_core
 	void AXSetMultiVoiceState(AXVPBMULTI* mv, uint16 state);
 	void AXSetMultiVoiceAdpcmLoop(AXVPBMULTI* mv, AXPBADPCMLOOP_t* loops);
 	sint32 AXIsMultiVoiceRunning(AXVPBMULTI* mv);
+	sint32 AXSetMultiVoiceDeviceMix(AXVPBMULTI* mv, sint32 deviceType, sint32 deviceIndex, uint32 busIndex, uint16 vol, sint16 delta);
 	
 	void AXOut_init();
 	void AXOut_reset();

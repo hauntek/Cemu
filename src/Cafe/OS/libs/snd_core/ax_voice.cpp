@@ -83,16 +83,16 @@ namespace snd_core
             __AXVoicesPerPriority[i].clear();
     }
 
-	SysAllocator<AXVPBInternal_t, AX_MAX_VOICES> _buffer__AXVPBInternalVoiceArray;
+	CafeStaticVar<AXVPBInternal_t, AX_MAX_VOICES> _buffer__AXVPBInternalVoiceArray{g_sndStaticData};
 	AXVPBInternal_t* __AXVPBInternalVoiceArray;
 
-	SysAllocator<AXVPBInternal_t, AX_MAX_VOICES> _buffer__AXVPBInternalVoiceShadowCopyArray;
+	CafeStaticVar<AXVPBInternal_t, AX_MAX_VOICES> _buffer__AXVPBInternalVoiceShadowCopyArray{g_sndStaticData};
 	AXVPBInternal_t* __AXVPBInternalVoiceShadowCopyArrayPtr; // this is the array used by audio mixing (it's synced at the beginning of every audio frame with __AXVPBInternalVoiceArray)
 
-	SysAllocator<AXVPBItd, AX_MAX_VOICES> _buffer__AXVPBItdArray;
+	CafeStaticVar<AXVPBItd, AX_MAX_VOICES> _buffer__AXVPBItdArray{g_sndStaticData};
 	AXVPBItd* __AXVPBItdArrayPtr;
 
-	SysAllocator<AXVPB, AX_MAX_VOICES> _buffer__AXVPBArray;
+	CafeStaticVar<AXVPB, AX_MAX_VOICES> _buffer__AXVPBArray{g_sndStaticData};
 	AXVPB* __AXVPBArrayPtr;
 
 	struct AXUSERPROTECTION
@@ -523,7 +523,7 @@ namespace snd_core
 			if (deviceIndex != 0 && deviceIndex != 1)
 				return -2;
 		}
-		else if (device == AX_DEV_TV)
+		else if (device == AX_DEV_RMT)
 		{
 			if (deviceIndex < 0 || deviceIndex >= 4)
 				return -2;
@@ -534,7 +534,7 @@ namespace snd_core
 	}
 
 
-	void __AXSetVoiceChannelMix(AXCHMIX_DEPR* mixOut, AXCHMIX_DEPR* mixIn, sint16* mixMask)
+	void __AXSetVoiceChannelMix(AXCHMIX2* mixOut, const AXCHMIX2* mixIn, sint16be* mixMask)
 	{
 		for (sint32 i = 0; i < AX_BUS_COUNT; i++)
 		{
@@ -549,7 +549,7 @@ namespace snd_core
 		}
 	}
 
-	sint32 AXSetVoiceDeviceMix(AXVPB* vpb, sint32 device, sint32 deviceIndex, AXCHMIX_DEPR* mix)
+	sint32 AXSetVoiceDeviceMix(AXVPB* vpb, sint32 device, sint32 deviceIndex, const AXCHMIX2* mix)
 	{
 		if (vpb == nullptr)
 			return -4;
@@ -561,31 +561,33 @@ namespace snd_core
 		AXVPBInternal_t* internal = __AXVPBInternalVoiceArray + (sint32)vpb->index;
 		sint32 channelCount;
 
-		uint16* deviceMixMask;
-		AXCHMIX_DEPR* voiceMix;
+		uint16be* deviceMixMask;
+		AXCHMIX2* voiceMix;
 		if (device == AX_DEV_TV)
 		{
 			channelCount = AX_TV_CHANNEL_COUNT;
-			voiceMix = internal->deviceMixTV + deviceIndex * 0x60 / 4;
+			voiceMix = internal->deviceMixTV + deviceIndex * (AX_BUS_COUNT * AX_TV_CHANNEL_COUNT);
 			deviceMixMask = internal->deviceMixMaskTV;
 		}
 		else if (device == AX_DEV_DRC)
 		{
 			channelCount = AX_DRC_CHANNEL_COUNT;
-			voiceMix = internal->deviceMixDRC + deviceIndex * 16;
-			deviceMixMask = internal->deviceMixMaskDRC;
+			voiceMix = internal->deviceMixDRC + deviceIndex * (AX_BUS_COUNT * AX_DRC_CHANNEL_COUNT);
+			deviceMixMask = internal->deviceMixMaskDRC + deviceIndex * AX_BUS_COUNT;
 		}
 		else if (device == AX_DEV_RMT)
 		{
-			assert_dbg();
+			cemu_assert_debug(false);
 			channelCount = AX_RMT_CHANNEL_COUNT;
+			voiceMix = internal->deviceMixRMT + deviceIndex * (AX_BUS_COUNT * AX_RMT_CHANNEL_COUNT);
+			deviceMixMask = internal->deviceMixMaskRMT + deviceIndex * AX_BUS_COUNT;
 		}
-		sint16 updatedMixMask[AX_BUS_COUNT];
-		for (sint32 i = 0; i < AX_BUS_COUNT; i++)
+		else
 		{
-			updatedMixMask[i] = 0;
+			UNREACHABLE;
 		}
-		sint16 channelMixMask[AX_BUS_COUNT];
+		sint16be updatedMixMask[AX_BUS_COUNT] = {};
+		sint16be channelMixMask[AX_BUS_COUNT];
 		for (sint32 c = 0; c < channelCount; c++)
 		{
 			__AXSetVoiceChannelMix(voiceMix, mix, channelMixMask);
@@ -599,11 +601,49 @@ namespace snd_core
 		}
 		for (sint32 i = 0; i < AX_BUS_COUNT; i++)
 		{
-			deviceMixMask[i] = _swapEndianU16(updatedMixMask[i]);
+			deviceMixMask[i] = updatedMixMask[i];
 		}
 		vpb->sync = (uint32)vpb->sync | (AX_SYNCFLAG_DEVICEMIXMASK | AX_SYNCFLAG_DEVICEMIX);
 		AXVoiceProtection_Acquire(vpb);
 		return 0;
+	}
+
+	sint32 AXSetVoiceMix(AXVPB* vpb, const AXCHMIX2* mix)
+	{
+		std::array<std::array<AXCHMIX2, AX_BUS_COUNT>, 6> deviceMix {};
+		uint32 busCount;
+		uint32 channelCount;
+		if (AXGetDeviceMode(AX_DEV_TV) == AX_MODE_STEREO)
+		{
+			busCount = 4;
+			channelCount = 2;
+		}
+		else
+		{
+			busCount = 3;
+			channelCount = 4;
+		}
+		for (auto busIndex = 0; busIndex < busCount; ++busIndex)
+		{
+			for (auto channel = 0; channel < channelCount; ++channel)
+			{
+				deviceMix[channel][busIndex] = mix[busIndex * channelCount + channel];
+			}
+		}
+		return AXSetVoiceDeviceMix(vpb, AX_DEV_TV, 0, &deviceMix[0][0]);
+	}
+
+	sint32 AXSetVoiceDRCMix(AXVPB* vpb, const AXCHMIX2* mix)
+	{
+		std::array<std::array<AXCHMIX2, 2>, AX_BUS_COUNT> deviceMix {};
+		deviceMix[0][0] = mix[0];
+		deviceMix[0][1] = mix[2];
+		if (IsSndCore2())
+		{
+			deviceMix[1][0] = mix[1];
+			deviceMix[1][1] = mix[3];
+		}
+		return AXSetVoiceDeviceMix(vpb, AX_DEV_DRC, 0, &deviceMix[0][0]);
 	}
 
 	void AXSetVoiceState(AXVPB* vpb, sint32 voiceState)
@@ -640,7 +680,7 @@ namespace snd_core
 	{
 		AXVPBInternal_t* internal = __AXVPBInternalVoiceArray + (sint32)(vpb->index);
 		for (sint32 i = 0; i < 16; i++)
-			internal->adpcmData.coef[i] = adpcm->a[i];
+			internal->adpcmData.coef[i] = adpcm->coef[i];
 		internal->adpcmData.gain = adpcm->gain;
 		internal->adpcmData.scale = adpcm->scale;
 		AXSetSyncFlag(vpb, AX_SYNCFLAG_ADPCMDATA);

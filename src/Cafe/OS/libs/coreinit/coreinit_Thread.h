@@ -362,6 +362,16 @@ namespace coreinit
 
 	static_assert(sizeof(OSFastCond) == 0x1C);
 
+	/********* TLS *********/
+
+	struct OSTLSBlock
+	{
+		MPTR addr;
+		uint32 ukn04;
+	};
+
+	static_assert(sizeof(OSTLSBlock) == 8);
+
 };
 
 struct OSThread_t
@@ -490,7 +500,7 @@ struct OSThread_t
 	// TLS
 	/* +0x664 */ uint16								numAllocatedTLSBlocks;
 	/* +0x666 */ sint16								tlsStatus;
-	/* +0x668 */ MPTR								tlsBlocksMPTR;
+	/* +0x668 */ MEMPTR<coreinit::OSTLSBlock>		tlsBlocks;
 	
 	/* +0x66C */ MEMPTR<coreinit::OSFastMutex>		waitingForFastMutex;
 	/* +0x670 */ coreinit::OSFastMutexLink			contendedFastMutex;
@@ -607,10 +617,15 @@ namespace coreinit
 	void OSFastCond_Wait(OSFastCond* fastCond, OSFastMutex* fastMutex);
 	void OSFastCond_Signal(OSFastCond* fastCond);
 
-	// scheduler
+	// scheduler (Cemu)
 	void OSSchedulerBegin(sint32 numCPUEmulationThreads);
 	void OSSchedulerEnd();
 	bool OSIsSchedulerActive();
+
+	// thread list access (Cemu)
+	std::span<OSThread_t*> OSLockActiveThreadList();
+	bool OSTryLockActiveThreadList(std::span<OSThread_t*>& threadList);
+	void OSUnlockActiveThreadList();
 
 	// internal
 	void __OSAddReadyThreadToRunQueue(OSThread_t* thread);
@@ -622,9 +637,3 @@ namespace coreinit
 }
 
 #pragma pack()
-
-// deprecated / clean up required
-extern MPTR activeThread[256];
-extern sint32 activeThreadCount;
-
-extern SlimRWLock srwlock_activeThreadList;

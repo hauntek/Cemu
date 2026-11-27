@@ -6,6 +6,11 @@
 #include "Cafe/HW/Latte/Renderer/Vulkan/CocoaSurface.h"
 #include "Cafe/HW/Latte/Renderer/Vulkan/VulkanPipelineCompiler.h"
 
+#include "Cafe/HW/Latte/Core/LatteTextureLoader.h"
+#if BOOST_OS_WINDOWS
+#include "util/DXGIWrapper/DXGIWrapper.h"
+#endif
+
 #include "Cafe/HW/Latte/Core/LatteBufferCache.h"
 #include "Cafe/HW/Latte/Core/LattePerformanceMonitor.h"
 #include "Cafe/HW/Latte/Core/LatteOverlay.h"
@@ -51,6 +56,7 @@ const  std::vector<const char*> kOptionalDeviceExtensions =
 	VK_KHR_PRESENT_ID_EXTENSION_NAME,
 	VK_EXT_DEPTH_CLIP_ENABLE_EXTENSION_NAME,
 	VK_EXT_PIPELINE_ROBUSTNESS_EXTENSION_NAME,
+	VK_KHR_VERTEX_ATTRIBUTE_DIVISOR_EXTENSION_NAME,
 	VK_EXT_ATTACHMENT_FEEDBACK_LOOP_LAYOUT_EXTENSION_NAME,
 	VK_EXT_ATTACHMENT_FEEDBACK_LOOP_DYNAMIC_STATE_EXTENSION_NAME
 };
@@ -74,8 +80,6 @@ VKAPI_ATTR VkBool32 VKAPI_CALL DebugUtilsCallback(VkDebugUtilsMessageSeverityFla
 	// validation errors which are difficult to fix
 	if (pCallbackData->messageIdNumber == 0x6c3b517c || pCallbackData->messageIdNumber == 0xffffffffa6b17cdf || pCallbackData->messageIdNumber == 0xffffffffc406fcb7)
 		return VK_FALSE; // its illegal to render to and sample from same texture
-	if (pCallbackData->messageIdNumber == 0x6e633069)
-		return VK_FALSE; // framebuffer attachments should have identity swizzle
 	if (pCallbackData->messageIdNumber == 0xffffffffb408bc0b)
 		return VK_FALSE; // too many samplers
 
@@ -289,6 +293,14 @@ void VulkanRenderer::GetDeviceFeatures()
 		prevStruct = &attachmentFeedbackLoopLayoutFeature;
 	}
 
+	VkPhysicalDeviceVertexAttributeDivisorFeaturesKHR vertexAttributeDivisorFeature{};
+	if (m_featureControl.deviceExtensions.vertex_attribute_divisor)
+	{
+		vertexAttributeDivisorFeature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VERTEX_ATTRIBUTE_DIVISOR_FEATURES_KHR;
+		vertexAttributeDivisorFeature.pNext = prevStruct;
+		prevStruct = &vertexAttributeDivisorFeature;
+	}
+
 	VkPhysicalDeviceFeatures2 physicalDeviceFeatures2{};
 	physicalDeviceFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
 	physicalDeviceFeatures2.pNext = prevStruct;
@@ -305,6 +317,14 @@ void VulkanRenderer::GetDeviceFeatures()
 		pfcp.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FLOAT_CONTROLS_PROPERTIES_KHR;
 		pfcp.pNext = prevStruct;
 		prevStruct = &pfcp;
+	}
+
+	VkPhysicalDeviceVertexAttributeDivisorPropertiesKHR vertexAttributeDivisorProperties{};
+	if (m_featureControl.deviceExtensions.vertex_attribute_divisor)
+	{
+		vertexAttributeDivisorProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VERTEX_ATTRIBUTE_DIVISOR_PROPERTIES_KHR;
+		vertexAttributeDivisorProperties.pNext = prevStruct;
+		prevStruct = &vertexAttributeDivisorProperties;
 	}
 
 	VkPhysicalDeviceProperties2 prop2{};
@@ -348,6 +368,10 @@ void VulkanRenderer::GetDeviceFeatures()
 		if ( pprf.pipelineRobustness != VK_TRUE )
 			m_featureControl.deviceExtensions.pipeline_robustness = false;
 	}
+	m_featureControl.deviceExtensions.vertex_attribute_divisor = m_featureControl.deviceExtensions.vertex_attribute_divisor &&
+		vertexAttributeDivisorFeature.vertexAttributeInstanceRateDivisor == VK_TRUE &&
+		vertexAttributeDivisorProperties.supportsNonZeroFirstInstance == VK_TRUE &&
+		vertexAttributeDivisorProperties.maxVertexAttribDivisor >= 0xFFFF;
 	if (m_featureControl.deviceExtensions.attachment_feedback_loop_layout)
 		m_featureControl.deviceExtensions.attachment_feedback_loop_layout = attachmentFeedbackLoopLayoutFeature.attachmentFeedbackLoopLayout == VK_TRUE;
 	if (m_featureControl.deviceExtensions.attachment_feedback_loop_dynamic_state && m_featureControl.deviceExtensions.attachment_feedback_loop_layout)
@@ -744,6 +768,16 @@ VulkanRenderer::VulkanRenderer() : Renderer(RendererAPI::Vulkan)
 		attachmentFeedbackLoopDynamicStateFeature.pNext = deviceExtensionFeatures;
 		deviceExtensionFeatures = &attachmentFeedbackLoopDynamicStateFeature;
 		attachmentFeedbackLoopDynamicStateFeature.attachmentFeedbackLoopDynamicState = VK_TRUE;
+	}
+
+	// enable VK_KHR_vertex_attribute_divisor
+	VkPhysicalDeviceVertexAttributeDivisorFeaturesKHR vertexAttributeDivisorFeature{};
+	if (m_featureControl.deviceExtensions.vertex_attribute_divisor)
+	{
+		vertexAttributeDivisorFeature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VERTEX_ATTRIBUTE_DIVISOR_FEATURES_KHR;
+		vertexAttributeDivisorFeature.pNext = deviceExtensionFeatures;
+		deviceExtensionFeatures = &vertexAttributeDivisorFeature;
+		vertexAttributeDivisorFeature.vertexAttributeInstanceRateDivisor = VK_TRUE;
 	}
 
 	std::vector<const char*> used_extensions;
@@ -1330,6 +1364,8 @@ VkDeviceCreateInfo VulkanRenderer::CreateDeviceCreateInfo(const std::vector<VkDe
 	}
 	if (m_featureControl.deviceExtensions.pipeline_robustness)
 		used_extensions.emplace_back(VK_EXT_PIPELINE_ROBUSTNESS_EXTENSION_NAME);
+	if (m_featureControl.deviceExtensions.vertex_attribute_divisor)
+		used_extensions.emplace_back(VK_KHR_VERTEX_ATTRIBUTE_DIVISOR_EXTENSION_NAME);
 	if (UseAttachmentFeedbackLoop())
 	{
 		used_extensions.emplace_back(VK_EXT_ATTACHMENT_FEEDBACK_LOOP_LAYOUT_EXTENSION_NAME);
@@ -1432,6 +1468,7 @@ bool VulkanRenderer::CheckDeviceExtensionSupport(const VkPhysicalDevice device, 
 	info.deviceExtensions.dynamic_rendering = false; // isExtensionAvailable(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
 	info.deviceExtensions.depth_clip_enable = isExtensionAvailable(VK_EXT_DEPTH_CLIP_ENABLE_EXTENSION_NAME);
 	info.deviceExtensions.pipeline_robustness = isExtensionAvailable(VK_EXT_PIPELINE_ROBUSTNESS_EXTENSION_NAME);
+	info.deviceExtensions.vertex_attribute_divisor = isExtensionAvailable(VK_KHR_VERTEX_ATTRIBUTE_DIVISOR_EXTENSION_NAME);
 	info.deviceExtensions.attachment_feedback_loop_layout = isExtensionAvailable(VK_EXT_ATTACHMENT_FEEDBACK_LOOP_LAYOUT_EXTENSION_NAME);
 	info.deviceExtensions.attachment_feedback_loop_dynamic_state = isExtensionAvailable(VK_EXT_ATTACHMENT_FEEDBACK_LOOP_DYNAMIC_STATE_EXTENSION_NAME);
 	// dynamic rendering doesn't provide any benefits for us right now. Driver implementations are very unoptimized as of Feb 2022
@@ -3306,9 +3343,11 @@ void VulkanRenderer::CreateDescriptorPool()
 
 VkDescriptorSet VulkanRenderer::backbufferBlit_createDescriptorSet(VkDescriptorSetLayout descriptor_set_layout, LatteTextureViewVk* texViewVk, bool useLinearTexFilter)
 {
+	auto* view = texViewVk->GetSamplerView(LatteTextureViewVk::LATTE_RGBA_SWIZZLE);
+	VkSampler sampler = texViewVk->GetDefaultTextureSampler(useLinearTexFilter);
 	uint64 hash = 0;
-	hash += (uint64)texViewVk->GetViewRGBA();
-	hash += (uint64)texViewVk->GetDefaultTextureSampler(useLinearTexFilter);
+	hash += (uint64)view;
+	hash += (uint64)sampler;
 
 	const auto it = m_backbufferBlitDescriptorSetCache.find(hash);
 	if (it != m_backbufferBlitDescriptorSetCache.cend())
@@ -3327,8 +3366,8 @@ VkDescriptorSet VulkanRenderer::backbufferBlit_createDescriptorSet(VkDescriptorS
 
 	VkDescriptorImageInfo imageInfo = {};
 	imageInfo.imageLayout = static_cast<LatteTextureVk*>(texViewVk->baseTexture)->GetDefaultLayout();
-	imageInfo.imageView = texViewVk->GetViewRGBA()->m_textureImageView;
-	imageInfo.sampler = texViewVk->GetDefaultTextureSampler(useLinearTexFilter);
+	imageInfo.imageView = view->m_textureImageView;
+	imageInfo.sampler = sampler;
 
 	VkWriteDescriptorSet descriptorWrites[2]{};
 

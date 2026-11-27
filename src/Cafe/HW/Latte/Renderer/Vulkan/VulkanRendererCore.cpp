@@ -1,4 +1,5 @@
 #include "Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.h"
+#include "Cafe/CafeSystem.h"
 #include "Cafe/HW/Latte/Renderer/Vulkan/VulkanAPI.h"
 #include "Cafe/HW/Latte/Renderer/Vulkan/LatteTextureVk.h"
 #include "Cafe/HW/Latte/Renderer/Vulkan/RendererShaderVk.h"
@@ -125,6 +126,14 @@ uint64 VulkanRenderer::draw_calculateGraphicsPipelineHash(const LatteFetchShader
 	stateHash = std::rotl<uint64>(stateHash, 17);
 	stateHash += depthControl;
 
+	// step rate divisor is part of the pipeline
+	uint32 stepRate0 = lcr.GetRawView()[Latte::REGADDR::VGT_INSTANCE_STEP_RATE_0];
+	uint32 stepRate1 = lcr.GetRawView()[Latte::REGADDR::VGT_INSTANCE_STEP_RATE_1];
+	if ( (fetchShader->stepRateRegMask&1) && stepRate0 != 1)
+		stateHash += (0xcac61ffb * stepRate0);
+	if ( (fetchShader->stepRateRegMask&2) && stepRate1 != 1)
+		stateHash += (0x9c181711 * stepRate1);
+
 	// polygon offset
 	if (polygonCtrl & (1 << 11))
 	{
@@ -190,8 +199,17 @@ bool VulkanRenderer::IsAsyncPipelineAllowed(uint32 numIndices)
 	// frame debuggers dont handle async well (as of 2020)
 	if (IsTracingToolEnabled())
 		return false;
-
 	CachedFBOVk* currentFBO = m_state.activeFBO;
+
+	if (CafeSystem::GetForegroundTitleCompatibility() == CafeSystem::TitleCompatibility::TekkenTagTournament2)
+	{
+		// stricter rules for Tekken Tag Tournament 2 which uses on-GPU texture compression and streamout for persistent vertex data
+		if (LatteGPUState.contextRegister[mmVGT_STRMOUT_EN] != 0)
+			return false;
+		if (numIndices <= 6 && currentFBO->hasDepthBuffer() && !LatteGPUState.contextNew.DB_DEPTH_CONTROL.get_Z_ENABLE())
+			return false;
+	}
+
 	auto fboExtend = currentFBO->GetExtend();
 
 	if (fboExtend.width == 1600 && fboExtend.height == 1600)
@@ -1451,6 +1469,7 @@ void VulkanRenderer::draw_execute_first(uint32 baseVertex, uint32 baseInstance, 
 	{
 		// invalid/uninitialized pipeline
 		m_state.activeVertexDS = nullptr;
+		m_state.drawSequenceSkip = true;
 		return;
 	}
 
@@ -1639,7 +1658,7 @@ void VulkanRenderer::draw_execute_continued(uint32 baseVertex, uint32 baseInstan
 	if (vkObjPipeline->GetPipeline() == VK_NULL_HANDLE)
 	{
 		// invalid/uninitialized pipeline
-		//m_state.activeVertexDS = nullptr;
+		m_state.drawSequenceSkip = true;
 		return;
 	}
 

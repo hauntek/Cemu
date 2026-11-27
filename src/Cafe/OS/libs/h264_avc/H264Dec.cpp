@@ -399,7 +399,6 @@ namespace H264
 		if (it == sDecoderSessions.end())
 			return;
 		H264DecoderBackend* session = it->second;
-		session->Destroy();
 		delete session;
 		sDecoderSessions.erase(it);
 	}
@@ -635,7 +634,7 @@ namespace H264
 
 	uint32 H264DECExecute(void* workMemory, void* imageOutput)
 	{
-		cemuLog_log(LogType::Force, "H264DECExecute(): [BEGIN]");
+		cemuLog_log(LogType::H264, "H264DECExecute(): [BEGIN]");
 		BenchmarkTimer bt;
 		bt.Start();
 		H264Context* ctx = (H264Context*)workMemory;
@@ -791,6 +790,7 @@ namespace H264
 
 		void RPLMapped() override
 		{
+			sCurrentSessionHandle = 1;
 			cafeExportRegister("h264", H264DECCheckMemSegmentation, LogType::H264);
 			cafeExportRegister("h264", H264DECMemoryRequirement, LogType::H264);
 			cafeExportRegister("h264", H264DECFindDecstartpoint, LogType::H264);
@@ -813,6 +813,13 @@ namespace H264
 
 			cafeExportRegister("h264", H264DECCheckDecunitLength, LogType::H264);
 		};
+
+		void RPLUnmapped() override
+		{
+			for (auto& session : sDecoderSessions)
+				delete session.second;
+			sDecoderSessions.clear();
+		}
 	}s_COSh264Module;
 
 	COSModule* GetModule()
